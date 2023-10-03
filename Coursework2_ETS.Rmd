@@ -1,0 +1,411 @@
+---
+title: "Coursework 2 - Exponential Smoothing"
+author: 'Rivyesch Ranjan'
+date: "2023-04-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Importing required libraries
+library(dplyr)
+library(ggplot2)
+library(forecast) 
+library(smooth)
+library(TSstudio)
+```
+
+## Data Pre-processing
+```{r}
+# Importing the cleaned data from coursework 1
+data <- read.csv('cleaned_data.csv',header=T)
+dates <- data$date_obj
+
+# create ts object
+ts_data <- ts(data$values_no_na, frequency = 7)
+
+# split time series into train and validation sets (90:10 ratio)
+total_obs <- length(ts_data)
+split_ts <- ts_split(ts.obj = ts_data, sample.out = round(0.1*total_obs))
+train_set <- split_ts$train
+val_set <- split_ts$test
+
+# verify length of each set
+length(train_set)
+length(val_set)
+```
+
+```{r}
+diff_train_7 <- diff(train_set, lag = 7)
+diff_val_7 <- diff(val_set, lag = 7)
+
+diff_train_7_1 <-  diff(diff(train_set, lag = 7), lag = 1)
+diff_val_7_1 <- diff(diff(val_set, lag = 7), lag = 1)
+```
+
+## Single Exponential Smoothing (Simple)
+```{r}
+alpha <- seq(0, 1, 0.001)
+alpha <- head(tail(alpha, -1), -1)
+ses_RMSE_7_1 <- NA
+ses_RMSE_7_1_train <- NA
+
+for (i in seq_along(alpha)){
+  fit <- ses(diff_train_7_1, alpha = alpha[i], h = 14)
+  ses_RMSE_7_1[i] <- forecast::accuracy(fit, diff_val_7_1)[2,2]
+}
+
+alpha_ses_RMSE_7_1 <- data_frame(alpha, ses_RMSE_7_1)
+min_alpha_ses_RMSE_7_1 <- filter(alpha_ses_RMSE_7_1, ses_RMSE_7_1 == min(ses_RMSE_7_1))
+
+# plot RMSE against alpha values
+ggplot(alpha_ses_RMSE_7_1, aes(alpha, ses_RMSE_7_1)) +
+  geom_line() +
+  geom_point(data = min_alpha_ses_RMSE_7_1, aes(alpha, ses_RMSE_7_1), size = 2, color = "red") +
+  xlab("Smoothing Factor for Level (alpha)") +
+  ylab("RMSE")
+
+min_alpha_ses_RMSE_7_1
+```
+
+
+```{r}
+fit <- ses(diff_train_7_1, alpha = 0.008, h = 14)
+
+ses_cv_e <- tsCV(diff_train_7_1, ses, alpha = 0.008, h = 14)
+sqrt(mean(ses_cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(ses(diff_train_7_1, alpha = 0.008, h = 14))^2, na.rm=TRUE))
+
+
+autoplot(fit) +
+  ggtitle("Forecast of ses() with optimal alpha") +
+  ylab("values")
+```
+
+## Double Exponential Smoothing (without damping)
+```{r}
+# Need beta to be small - big values gives error
+beta <- seq(0, 0.008, 0.0001)
+beta <- head(tail(beta, -1), -1)
+holt_RMSE_7 <- NA
+
+for (i in seq_along(beta)){
+  fit <- holt(diff_train_7, beta = beta[i], h = 14)
+  holt_RMSE_7[i] <- forecast::accuracy(fit, diff_val_7)[2,2]
+}
+
+beta_holt_RMSE_7 <- data_frame(beta, holt_RMSE_7)
+min_beta_holt_RMSE_7 <- filter(beta_holt_RMSE_7, holt_RMSE_7 == min(holt_RMSE_7))
+
+# plot RMSE against beta values
+ggplot(beta_holt_RMSE_7, aes(beta, holt_RMSE_7)) +
+  geom_line() +
+  geom_point(data = min_beta_holt_RMSE_7, aes(beta, holt_RMSE_7), size = 2, color = "red") +
+  xlab("Smoothing Factor for Trend (beta)") +
+  ylab("RMSE")
+
+min_beta_holt_RMSE_7
+```
+
+
+```{r}
+fit <- holt(diff_train_7, beta = 0.0079, h = 14)
+
+beta_holt_cv_e <- tsCV(diff_train_7, holt, beta = 0.0079, h = 14)
+sqrt(mean(beta_holt_cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(holt(diff_train_7, beta = 0.0079, h = 14))^2, na.rm=TRUE))
+
+autoplot(fit) +
+  ggtitle("Forecast of holt() with optimal beta") +
+  ylab("values")
+```
+
+## Double Exponential Smoothing (with damping)
+```{r}
+phi <- seq(0.80, 0.98, 0.001)
+phi <- head(tail(phi, -1), -1)
+holt_RMSE_7_phi <- NA
+
+for (i in seq_along(phi)){
+  fit <- holt(diff_train_7, phi = phi[i], h = 14, damped = TRUE)
+  holt_RMSE_7_phi[i] <- forecast::accuracy(fit, diff_val_7)[2,2]
+}
+
+phi_holt_RMSE_7 <- data_frame(phi, holt_RMSE_7_phi)
+min_phi_holt_RMSE_7 <- filter(phi_holt_RMSE_7, holt_RMSE_7_phi == min(holt_RMSE_7_phi))
+
+# plot RMSE against phi values
+ggplot(phi_holt_RMSE_7, aes(phi, holt_RMSE_7_phi)) +
+  geom_line() +
+  geom_point(data = min_phi_holt_RMSE_7, aes(phi, holt_RMSE_7_phi), size = 2, color = "red") +
+  xlab("Damping Coefficient (phi)") +
+  ylab("RMSE")
+
+min_phi_holt_RMSE_7
+```
+
+```{r}
+fit <- holt(diff_train_7, phi = 0.964, h = 14)
+  
+phi_holt_cv_e <- tsCV(diff_train_7, holt, phi = 0.964, h = 14, damped = TRUE)
+sqrt(mean(phi_holt_cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(holt(diff_train_7, phi = 0.964, h = 14, damped = TRUE))^2, na.rm=TRUE))
+
+autoplot(fit) +
+  ggtitle("Forecast of holt() with optimal phi") +
+  ylab("values")
+```
+
+## Triple Exponential Smoothing
+```{r}
+gamma <- seq(0, 0.992, 0.001)
+gamma <- head(tail(gamma, -1), -1)
+hw_RMSE <- NA
+
+for (i in seq_along(gamma)){
+  # fit ets on original 
+  fit <- hw(train_set, gamma = gamma[i], h = 14)
+  hw_RMSE[i] <- forecast::accuracy(fit, val_set)[2,2]
+}
+
+# create dataframes for plotting purposes
+gamma_hw_RMSE <- data_frame(gamma, hw_RMSE)
+min_hw_RMSE <- filter(gamma_hw_RMSE, hw_RMSE == min(hw_RMSE))
+
+# plot RMSE against gamma values
+ggplot(gamma_hw_RMSE, aes(gamma, hw_RMSE)) +
+  geom_line() +
+  geom_point(data = min_hw_RMSE, aes(gamma, hw_RMSE), size = 2, color = "red") +
+  xlab("Smoothing Factor for Season (gamma)") +
+  ylab("RMSE")
+
+min_hw_RMSE
+```
+
+```{r}
+fit <- hw(train_set, gamma = 0.007, h = 14)
+  
+phi_holt_cv_e <- tsCV(train_set, hw, gamma = 0.007, h = 14, damped = TRUE)
+sqrt(mean(phi_holt_cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(hw(train_set, gamma = 0.007, h = 14, damped = TRUE))^2, na.rm=TRUE))
+
+autoplot(fit) +
+  ggtitle("Forecast of holt() with optimal gamma") +
+  ylab("values")
+
+```
+
+## Triple Exponential Smoothing (seasonality type)
+```{r}
+# Case 1: multiplicative error, additive trend, multiplicative seasonality
+optimal_ets_MAM <- ets(train_set, model = "MAM", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007)
+forecast_optimal_ets <- forecast(optimal_ets_MAM, h = 14)
+autoplot(forecast_optimal_ets)
+forecast::accuracy(forecast_optimal_ets, val_set)
+ets_func <- function(x, h) {forecast(ets(x, model = "MAM",
+                                         alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007), h = h)}
+cv_model <- tsCV(train_set, ets_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(ets(train_set, model = "MAM", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007),
+                             h = 14))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(optimal_ets_MAM, h = length(val_set))$mean)
+summary(optimal_ets_MAM)
+checkresiduals(optimal_ets_MAM)
+```
+
+```{r}
+# Case 2: multiplicative error, multiplicative trend, multiplicative seasonality
+optimal_ets_MMM <- ets(train_set, model = "MMM", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007)
+forecast_optimal_ets <- forecast(optimal_ets_MMM, h = 14)
+autoplot(forecast_optimal_ets)
+forecast::accuracy(forecast_optimal_ets, val_set)
+ets_func <- function(x, h) {forecast(ets(x, model = "MMM",
+                                         alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007), h = h)}
+cv_model <- tsCV(train_set, ets_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(ets(train_set, model = "MMM", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007),
+                             h = 14))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(optimal_ets_MMM, h = length(val_set))$mean)
+summary(optimal_ets_MMM)
+checkresiduals(optimal_ets_MMM)
+```
+
+```{r}
+# Case 3: multiplicative error, additive trend, additive seasonality
+optimal_ets_MAA <- ets(train_set, model = "MAA", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007)
+forecast_optimal_ets <- forecast(optimal_ets_MAA, h = 14)
+autoplot(forecast_optimal_ets)
+forecast::accuracy(forecast_optimal_ets, val_set)
+ets_func <- function(x, h) {forecast(ets(x, model = "MAA",
+                                         alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007), h = h)}
+cv_model <- tsCV(train_set, ets_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(ets(train_set, model = "MAA", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007),
+                             h = 14))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(optimal_ets_MAA, h = length(val_set))$mean)
+summary(optimal_ets_MAA)
+checkresiduals(optimal_ets_MAA)
+```
+
+```{r}
+# Case 4: additive error, additive trend, additive seasonality
+optimal_ets_AAA <- ets(train_set, model = "AAA", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007)
+forecast_optimal_ets <- forecast(optimal_ets_AAA, h = 14)
+autoplot(forecast_optimal_ets)
+forecast::accuracy(forecast_optimal_ets, val_set)
+ets_func <- function(x, h) {forecast(ets(x, model = "AAA",
+                                         alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007), h = h)}
+cv_model <- tsCV(train_set, ets_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(ets(train_set, model = "AAA", alpha = 0.008, beta = 0.0079, phi = 0.964, gamma = 0.007),
+                             h = 14))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(optimal_ets_AAA, h = length(val_set))$mean)
+summary(optimal_ets_AAA)
+checkresiduals(optimal_ets_AAA)
+
+```
+
+## Optimal ETS
+Based on the above experiments the optimal values for each hyperparameter was used below
+
+```{r}
+optimal_ets <- ets(train_set, model = "MAA", alpha = 0.004, beta = 5e-04, 
+                   phi = 0.964, gamma = 0.006)
+summary(optimal_ets)
+forecast_optimal_ets <- forecast(optimal_ets, h = length(val_set))
+autoplot(forecast_optimal_ets) +
+  ggtitle("Forecast of ets() with optimal parameters") +
+  ylab("values")
+accuracy(forecast_optimal_ets, val_set)
+
+ets_func <- function(x, h) {forecast(ets(x, model = "MAA", 
+                                         alpha = 0.004, beta = 5e-04, 
+                                         phi = 0.964, gamma = 0.006), h = h)}
+cv_model <- tsCV(ts_data, ets_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+
+sqrt(mean(residuals(forecast(ets(ts_data, model = "ANA", alpha = 0.004, 
+                                 beta = 5e-04, phi = 0.964, gamma = 0.006), 
+                             h = 14))^2, na.rm=TRUE))
+```
+
+```{r}
+optimal_hw <- hw(train_set, alpha = 0.004, beta = 5e-04, phi = 0.964, gamma = 0.006, 
+                 seasonal = "additive", damped = TRUE, h = length(val_set))
+summary(optimal_hw)
+autoplot(optimal_hw)
+accuracy(optimal_hw, val_set)
+
+hw_cv_e <- tsCV(ts_data, hw, alpha = 0.004, beta = 5e-04, phi = 0.964, gamma = 0.006, 
+                 seasonal = "additive", damped = TRUE, h = 14)
+sqrt(mean(hw_cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(hw(ts_data, alpha = 0.004, beta = 5e-04, phi = 0.964, gamma = 0.006, 
+                 seasonal = "additive", damped = TRUE, h = 14))^2, na.rm=TRUE))
+```
+
+```{r}
+# automated model
+auto_ets <- ets(train_set, model = "ZZZ")
+forecast_auto_ets <- forecast(auto_ets, h = 14)
+autoplot(forecast_auto_ets)
+forecast::accuracy(forecast_auto_ets, val_set)
+ets_func <- function(x, h) {forecast(ets(x, model = "ZZZ"), h = h)}
+cv_model <- tsCV(train_set, ets_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(ets(train_set, model = "ZZZ"), h = 14))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(auto_ets, h = length(val_set))$mean)
+summary(forecast_auto_ets)
+checkresiduals(forecast_auto_ets)
+```
+
+```{r}
+mean_model <- meanf(train_set, h = 14)
+# summary(mean_model)
+snaive_model <- snaive(train_set, h = 14)
+naive_model <- naive(train_set, h = 14)
+# rw_model <- rwf(train_set, h = length(val_set))
+
+Metrics::smape(val_set, mean_model$mean)
+Metrics::smape(val_set, snaive_model$mean)
+Metrics::smape(val_set, naive_model$mean)
+```
+
+```{r}
+forecast::accuracy(mean_model, val_set)[,c(2,3)]
+forecast::accuracy(naive_model, val_set)[,c(2,3)]
+# accuracy(rw_model, test)
+forecast::accuracy(snaive_model, val_set)[,c(2,3)]
+# accuracy(forecast(auto_ets, h = length(test)), test) # ZZZ
+# accuracy(optimal_hw, test)
+```
+
+```{r}
+cv_e <- tsCV(train_set, meanf, h = 14)
+sqrt(mean(cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(mean_model)^2, na.rm=TRUE))
+
+cv_e <- tsCV(train_set, naive, h = 14)
+sqrt(mean(cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(naive_model)^2, na.rm=TRUE))
+
+cv_e <- tsCV(train_set, snaive, h = 14)
+sqrt(mean(cv_e^2, na.rm=TRUE))
+sqrt(mean(residuals(snaive_model)^2, na.rm=TRUE))
+```
+
+```{r}
+autoplot(train) +
+  autolayer(mean_model, series = "Mean") +
+  # autolayer(rw_model, series = "Drift") +
+  # autolayer(naive_model, series = "Naive") +
+  autolayer(snaive_model, series = "Seasonal Naive") +
+  # autolayer(forecast(auto_ets, h = length(test)), series = "Auto Exponential Smoothing") +
+  autolayer(forecast(optimal_ets, h =  length(test)), series = "Exponential Smoothing")  +
+  ggtitle("Forecast of ets with optimal parameters, mean and seasonal naive models") +
+  ylab("values")
+```
+
+```{r}
+autoplot(train) +
+  autolayer(forecast(optimal_ets, h =  length(test)), series = "Manual ETS Model") +
+  autolayer(forecast(auto_ets, h =  length(test)), series = "Auto ETS Model")  +
+  ggtitle("Forecast of ets with optimal parameters, and automatically built ets models") +
+  ylab("values")
+```
+
+```{r}
+checkresiduals(optimal_hw)
+```
+
+```{r}
+ts_values <- ts(window(ts_data, start = c(101, 6)), frequency = 7, start = c(101, 6))
+length(data_plot)
+
+mean_forecast <- meanf(ts_data, h = 14)
+snaive_forecast <- snaive(ts_data, h = 14)
+naive_forecast <- naive(ts_data, h = 14)
+
+autoplot(ts_values) +
+  autolayer(naive_forecast, series = "Naive Model") +
+  autolayer(mean_forecast, series = "Mean Model") +
+  autolayer(snaive_forecast, series = "Seasonal Naive Model") 
+  # ggtitle("Forecast of ets with optimal parameters, and automatically built ets models") +
+  # ylab("values")
+```
+
+```{r}
+# Auto ETS
+auto_ets <- ets(ts_data, model = "ZZZ")
+forecast_auto_ets <- forecast(auto_ets, h = 14)
+
+ets_forecast <- forecast(auto_ets, h = 14)
+ets_forecast <- forecast(ets(ts_data, model = "MNA", alpha = 0.0663, gamma = 0.0001), h = 14)
+```

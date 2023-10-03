@@ -1,0 +1,420 @@
+---
+title: "Coursework 3 - Neural Network"
+author: 'Rivyesch Ranjan'
+date: "2023-04-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Importing libraries
+library(forecast)
+library(TSstudio)
+```
+
+## Data Pre-processing
+```{r}
+# Importing cleaned data from previous coursework
+data <- read.csv('cleaned_data.csv',header=T)
+dates <- data$date_obj
+
+# create ts object
+ts_data <- ts(data$values_no_na, frequency = 7)
+
+# split time series into train and validation sets (90:10 ratio)
+total_obs <- length(ts_data)
+split_ts <- ts_split(ts.obj = ts_data, sample.out = round(0.1*total_obs))
+train_set <- split_ts$train
+val_set <- split_ts$test
+
+# verify length of each set
+length(train_set)
+length(val_set)
+```
+
+```{r}
+diff_train_7 <- diff(train_set, lag = 7)
+diff_val_7 <- diff(val_set, lag = 7)
+
+diff_train_7_1 <-  diff(diff(train_set, lag = 7), lag = 1)
+diff_val_7_1 <- diff(diff(val_set, lag = 7), lag = 1)
+```
+
+## Neural Network - Automatic Process
+
+```{r}
+ann1 <-nnetar(train_set)
+print(ann1)
+
+accnfcst<-forecast(ann1,h=14)
+autoplot(accnfcst)
+
+fcast <- forecast(ann1, PI=TRUE, h=14)
+autoplot(fcast)
+
+forecast::accuracy(forecast(ann1), val_set)[,c(2,3,5,6)]
+checkresiduals(ann1)
+ggtsdisplay(ann1$residuals)
+```
+
+## Neural Network - Manual Process
+
+```{r}
+p = 1
+P = 1
+ann2 <-nnetar(train_set, p, P=P)
+ann2
+forecast::accuracy(forecast(ann2), val_set)[,c(2,3,5,6)]
+checkresiduals(ann2)
+ggtsdisplay(ann2$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann2, h=length(val_set))$mean)
+```
+
+```{r}
+p = 7
+P = 1
+ann3 <-nnetar(train_set, p, P=P)
+ann3
+forecast::accuracy(forecast(ann3), val_set)[,c(2,3,5,6)]
+checkresiduals(ann3)
+ggtsdisplay(ann3$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann3, h=length(val_set))$mean)
+```
+
+```{r}
+p = 7
+P = 2
+ann4 <-nnetar(train_set, p, P=P)
+ann4
+forecast::accuracy(forecast(ann4), val_set)[,c(2,3,5,6)]
+checkresiduals(ann4)
+ggtsdisplay(ann4$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann4, h=length(val_set))$mean)
+```
+
+```{r}
+p = 2
+P = 2
+ann5 <-nnetar(train_set, p, P=P)
+ann5
+forecast::accuracy(forecast(ann5), val_set)[,c(2,3,5,6)]
+checkresiduals(ann5)
+ggtsdisplay(ann5$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann5, h=length(val_set))$mean)
+```
+
+```{r}
+p = 7
+P = 0
+ann6 <-nnetar(train_set, p, P=P)
+ann6
+forecast::accuracy(forecast(ann6), val_set)[,c(2,3,5,6)]
+checkresiduals(ann6)
+ggtsdisplay(ann6$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann6, h=length(val_set))$mean)
+```
+
+```{r}
+p = 14
+P = 1
+ann7 <-nnetar(train_set, p, P=P)
+ann7
+forecast::accuracy(forecast(ann7), val_set)[,c(2,3,5,6)]
+checkresiduals(ann7)
+ggtsdisplay(ann7$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann7, h=length(val_set))$mean)
+```
+
+```{r}
+p = 14
+P = 2
+ann8 <-nnetar(train_set, p, P=P)
+ann8
+forecast::accuracy(forecast(ann8), val_set)[,c(2,3,5,6)]
+checkresiduals(ann8)
+ggtsdisplay(ann8$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann8, h=length(val_set))$mean)
+```
+
+```{r}
+p = 2
+P = 3
+ann9 <-nnetar(train_set, p, P=P)
+ann9
+forecast::accuracy(forecast(ann9), val_set)[,c(2,3,5,6)]
+checkresiduals(ann9)
+ggtsdisplay(ann9$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann9, h=length(val_set))$mean)
+```
+
+```{r}
+p = 2
+P = 1
+ann10 <-nnetar(train_set, p, P=P)
+ann10
+forecast::accuracy(forecast(ann10), val_set)[,c(2,3,5,6)]
+checkresiduals(ann10)
+ggtsdisplay(ann10$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann10, h=length(val_set))$mean)
+```
+
+```{r}
+p = 5
+P = 1
+ann11 <-nnetar(train_set, p, P=P)
+ann11
+forecast::accuracy(forecast(ann11), val_set)[,c(2,3,5,6)]
+checkresiduals(ann11)
+ggtsdisplay(ann11$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann11, h=length(val_set))$mean)
+```
+
+```{r}
+p = 5
+P = 2
+ann12 <-nnetar(train_set, p, P=P)
+ann12
+forecast::accuracy(forecast(ann12), val_set)[,c(2,3,5,6)]
+checkresiduals(ann12)
+ggtsdisplay(ann12$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann12, h=length(val_set))$mean)
+```
+
+```{r}
+p = 5
+P = 3
+ann13 <-nnetar(train_set, p, P=P)
+ann13
+forecast::accuracy(forecast(ann13), val_set)[,c(2,3,5,6)]
+checkresiduals(ann13)
+ggtsdisplay(ann13$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann13, h=length(val_set))$mean)
+```
+
+```{r}
+p = 5
+P = 0
+ann14 <-nnetar(train_set, p, P=P)
+ann14
+forecast::accuracy(forecast(ann14), val_set)[,c(2,3,5,6)]
+checkresiduals(ann14)
+ggtsdisplay(ann14$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann14, h=length(val_set))$mean)
+```
+
+```{r}
+p = 2
+P = 0
+ann15 <-nnetar(train_set, p, P=P)
+ann15
+forecast::accuracy(forecast(ann15), val_set)[,c(2,3,5,6)]
+checkresiduals(ann15)
+ggtsdisplay(ann15$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann15, h=length(val_set))$mean)
+```
+
+```{r}
+p = 2
+P = 4
+ann16 <-nnetar(train_set, p, P=P)
+ann16
+forecast::accuracy(forecast(ann16), val_set)[,c(2,3,5,6)]
+checkresiduals(ann16)
+ggtsdisplay(ann16$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann16, h=length(val_set))$mean)
+```
+
+```{r}
+p = 14
+P = 3
+ann17 <-nnetar(train_set, p, P=P)
+ann17
+forecast::accuracy(forecast(ann17), val_set)[,c(2,3,5,6)]
+checkresiduals(ann17)
+ggtsdisplay(ann17$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann17, h=length(val_set))$mean)
+```
+
+```{r}
+p = 21
+P = 1
+ann18 <-nnetar(train_set, p, P=P)
+ann18
+forecast::accuracy(forecast(ann18), val_set)[,c(2,3,5,6)]
+checkresiduals(ann18)
+ggtsdisplay(ann18$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann18, h=length(val_set))$mean)
+```
+
+```{r}
+p = 28
+P = 1
+ann19 <-nnetar(train_set, p, P=P)
+ann19
+forecast::accuracy(forecast(ann19), val_set)[,c(2,3,5,6)]
+checkresiduals(ann19)
+ggtsdisplay(ann19$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann19, h=length(val_set))$mean)
+```
+
+```{r}
+p = 21
+P = 2
+ann20 <-nnetar(train_set, p, P=P)
+ann20
+forecast::accuracy(forecast(ann20), val_set)[,c(2,3,5,6)]
+checkresiduals(ann20)
+ggtsdisplay(ann20$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann20, h=length(val_set))$mean)
+```
+
+```{r}
+p = 28
+P = 2
+ann21 <-nnetar(train_set, p, P=P)
+ann21
+forecast::accuracy(forecast(ann21), val_set)[,c(2,3,5,6)]
+checkresiduals(ann21)
+ggtsdisplay(ann21$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann21, h=length(val_set))$mean)
+```
+
+```{r}
+p = 1
+P = 4
+ann22 <-nnetar(train_set, p, P=P)
+ann22
+forecast::accuracy(forecast(ann22), val_set)[,c(2,3,5,6)]
+checkresiduals(ann22)
+ggtsdisplay(ann22$residuals)
+
+nn_func <- function(x, h) {forecast(nnetar(x, p, P=P, h = h))}
+cv_model <- tsCV(ts_data, nn_func, h = 14)
+sqrt(mean(cv_model^2, na.rm=TRUE))
+sqrt(mean(residuals(forecast(nnetar(ts_data, p, P=P, h = 14)))^2, na.rm=TRUE))
+
+Metrics::smape(val_set, forecast(ann22, h=length(val_set))$mean)
+```

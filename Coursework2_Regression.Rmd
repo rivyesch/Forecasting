@@ -1,0 +1,632 @@
+---
+title: "Coursework 2 - Regression"
+author: 'Rivyesch Ranjan'
+date: "2023-04-30"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Importing required libraries
+library(ggplot2)
+library(forecast) 
+library(dplyr)
+library(imputeTS)
+library(smooth)
+library(tidyquant)
+library(Metrics)
+library(lubridate)
+library(TSstudio)
+library(timetk)
+library(timeDate)
+library(car)
+```
+
+## Data Pre-processing
+
+```{r}
+data <- read.csv('NN5-034.csv',header=T)[-1:-3,]
+
+# All missing values are treated as NA
+data[data == ''] <- NA
+
+colnames(data) <- c('date','values')
+data$date_obj <- dmy(data$date)
+
+# set start date and frequency (daily data so set to 365.25)
+data$ts <- ts(data$values, frequency = 365.25, start = c(1996, 3, 18))
+
+# Replace zero values with NA
+data$values <- as.numeric(data$values)
+data$ts <- ifelse(data$values == 0, NA, data$values)
+
+# Linear interpolation to fill missing values in time series
+data$ts_no_na <- na_interpolation(data$ts, option = "linear")
+```
+
+```{r}
+# create ts object
+ts_data <- ts(data$ts_no_na, frequency = 7)
+ts_df <- data.frame(value = ts_data, date = data$date_obj)
+complete_df <- data.frame(ts_no_na = ts_data, date_obj = data$date_obj, values = data$values, ts_no_na = data$ts_no_na)
+```
+
+```{r}
+# detect and create dummy variables for outliers 
+stl_decomposition <- stl(complete_df$ts_no_na, 7)
+plot(stl_decomposition)
+ts_comp <- as.data.frame(stl_decomposition$time.series)
+tsdisplay(ts_comp$remainder)
+
+tsoutliers(complete_df$ts_no_na)
+
+boxplot(complete_df$ts_no_na)
+
+outliers <- which(abs(ts_comp$remainder) > 2*sd(ts_comp$remainder))
+remainder_df <- as.data.frame(ts_comp$remainder)
+colnames(remainder_df) <- "remainders"
+remainder_df$outliers <- NA
+remainder_df$outliers[outliers] <- remainder_df$remainders[outliers]
+
+# create dummy variables for outlier
+complete_df$outliers <- ifelse(is.na(remainder_df$outliers), 0, 1)
+```
+
+```{r}
+# create dummy variables for NA
+complete_df$na <- ifelse(is.na(complete_df$values), 1, 0)
+
+# Create dummy variables for bank holidays
+complete_df$bank_holidays <- as.integer(complete_df$date_obj %in% as.Date(holidayLONDON(1996:1998)))
+
+data_transform <- complete_df
+
+model_df <- data.frame(y = ts_data)
+model_df$day_num <- wday(data_transform$date_obj)
+model_df$week_num <- week(data_transform$date_obj)
+
+model_df$week_num[model_df$week_num == 5] <- 1 
+model_df$week_num[model_df$week_num == 6] <- 2
+model_df$week_num[model_df$week_num == 7] <- 3 
+model_df$week_num[model_df$week_num == 8] <- 4 
+model_df$week_num[model_df$week_num == 9] <- 1 
+model_df$week_num[model_df$week_num == 10] <- 2
+model_df$week_num[model_df$week_num == 11] <- 3 
+model_df$week_num[model_df$week_num == 12] <- 4 
+model_df$week_num[model_df$week_num == 13] <- 1 
+model_df$week_num[model_df$week_num == 14] <- 2
+model_df$week_num[model_df$week_num == 15] <- 3 
+model_df$week_num[model_df$week_num == 16] <- 4 
+model_df$week_num[model_df$week_num == 17] <- 1 
+model_df$week_num[model_df$week_num == 18] <- 2
+model_df$week_num[model_df$week_num == 19] <- 3 
+model_df$week_num[model_df$week_num == 20] <- 4 
+model_df$week_num[model_df$week_num == 21] <- 1 
+model_df$week_num[model_df$week_num == 22] <- 2
+model_df$week_num[model_df$week_num == 23] <- 3 
+model_df$week_num[model_df$week_num == 24] <- 4 
+model_df$week_num[model_df$week_num == 21] <- 1 
+model_df$week_num[model_df$week_num == 22] <- 2
+model_df$week_num[model_df$week_num == 23] <- 3 
+model_df$week_num[model_df$week_num == 24] <- 4 
+model_df$week_num[model_df$week_num == 25] <- 1 
+model_df$week_num[model_df$week_num == 26] <- 2
+model_df$week_num[model_df$week_num == 27] <- 3 
+model_df$week_num[model_df$week_num == 28] <- 4 
+model_df$week_num[model_df$week_num == 29] <- 1 
+model_df$week_num[model_df$week_num == 30] <- 2
+model_df$week_num[model_df$week_num == 31] <- 3 
+model_df$week_num[model_df$week_num == 32] <- 4 
+model_df$week_num[model_df$week_num == 33] <- 1 
+model_df$week_num[model_df$week_num == 34] <- 2
+model_df$week_num[model_df$week_num == 35] <- 3 
+model_df$week_num[model_df$week_num == 36] <- 4 
+model_df$week_num[model_df$week_num == 37] <- 1 
+model_df$week_num[model_df$week_num == 38] <- 2
+model_df$week_num[model_df$week_num == 39] <- 3 
+model_df$week_num[model_df$week_num == 40] <- 4 
+model_df$week_num[model_df$week_num == 41] <- 1 
+model_df$week_num[model_df$week_num == 42] <- 2
+model_df$week_num[model_df$week_num == 43] <- 3 
+model_df$week_num[model_df$week_num == 44] <- 4 
+model_df$week_num[model_df$week_num == 45] <- 1 
+model_df$week_num[model_df$week_num == 46] <- 2
+model_df$week_num[model_df$week_num == 47] <- 3 
+model_df$week_num[model_df$week_num == 48] <- 4 
+
+# identify month number
+model_df$month_num <- month(data_transform$date_obj)
+
+model_df$month_num[model_df$month_num == 1] <- 1
+model_df$month_num[model_df$month_num == 2] <- 1
+model_df$month_num[model_df$month_num == 3] <- 1
+model_df$month_num[model_df$month_num == 4] <- 2
+model_df$month_num[model_df$month_num == 5] <- 2
+model_df$month_num[model_df$month_num == 6] <- 2
+model_df$month_num[model_df$month_num == 7] <- 3
+model_df$month_num[model_df$month_num == 8] <- 3
+model_df$month_num[model_df$month_num == 9] <- 3
+model_df$month_num[model_df$month_num == 10] <- 4
+model_df$month_num[model_df$month_num == 11] <- 4
+model_df$month_num[model_df$month_num == 12] <- 4
+
+model_df$lag_1 <- scale(dplyr::lag(as.numeric(ts_data), n = 1))
+model_df$lag_2 <- scale(dplyr::lag(as.numeric(ts_data), n = 2))
+model_df$lag_3 <- scale(dplyr::lag(as.numeric(ts_data), n = 3))
+model_df$lag_4 <- scale(dplyr::lag(as.numeric(ts_data), n = 4))
+model_df$lag_5 <- scale(dplyr::lag(as.numeric(ts_data), n = 5))
+model_df$lag_6 <- scale(dplyr::lag(as.numeric(ts_data), n = 6))
+model_df$lag_7 <- scale(dplyr::lag(as.numeric(ts_data), n = 7))
+model_df$lag_8 <- scale(dplyr::lag(as.numeric(ts_data), n = 8))
+model_df$lag_9 <- scale(dplyr::lag(as.numeric(ts_data), n = 9))
+model_df$lag_10 <- scale(dplyr::lag(as.numeric(ts_data), n = 10))
+model_df$lag_11 <- scale(dplyr::lag(as.numeric(ts_data), n = 11))
+model_df$lag_12 <- scale(dplyr::lag(as.numeric(ts_data), n = 12))
+model_df$lag_13 <- scale(dplyr::lag(as.numeric(ts_data), n = 13))
+model_df$lag_14 <- scale(dplyr::lag(as.numeric(ts_data), n = 14))
+model_df$lag_15 <- scale(dplyr::lag(as.numeric(ts_data), n = 15))
+model_df$lag_16 <- scale(dplyr::lag(as.numeric(ts_data), n = 16))
+model_df$lag_17 <- scale(dplyr::lag(as.numeric(ts_data), n = 17))
+model_df$lag_18 <- scale(dplyr::lag(as.numeric(ts_data), n = 18))
+model_df$lag_19 <- scale(dplyr::lag(as.numeric(ts_data), n = 19))
+model_df$lag_20 <- scale(dplyr::lag(as.numeric(ts_data), n = 20))
+model_df$lag_21 <- scale(dplyr::lag(as.numeric(ts_data), n = 21))
+model_df$lag_22 <- scale(dplyr::lag(as.numeric(ts_data), n = 22))
+model_df$lag_23 <- scale(dplyr::lag(as.numeric(ts_data), n = 23))
+model_df$lag_24 <- scale(dplyr::lag(as.numeric(ts_data), n = 24))
+model_df$lag_25 <- scale(dplyr::lag(as.numeric(ts_data), n = 25))
+model_df$lag_26 <- scale(dplyr::lag(as.numeric(ts_data), n = 26))
+model_df$lag_27 <- scale(dplyr::lag(as.numeric(ts_data), n = 27))
+model_df$lag_28 <- scale(dplyr::lag(as.numeric(ts_data), n = 28))
+model_df$lag_29 <- scale(dplyr::lag(as.numeric(ts_data), n = 29))
+model_df$lag_30 <- scale(dplyr::lag(as.numeric(ts_data), n = 30))
+
+# create weekly seasonality dummy variable 
+model_df$day_num1 <- 0
+model_df$day_num2 <- 0
+model_df$day_num3 <- 0
+model_df$day_num4 <- 0
+model_df$day_num5 <- 0
+model_df$day_num6 <- 0
+model_df$day_num7 <- 0
+
+model_df$day_num1[model_df$day_num == 2] <- 1
+model_df$day_num2[model_df$day_num == 3] <- 1
+model_df$day_num3[model_df$day_num == 4] <- 1
+model_df$day_num4[model_df$day_num == 5] <- 1
+model_df$day_num5[model_df$day_num == 6] <- 1
+model_df$day_num7[model_df$day_num == 7] <- 1
+
+# create monthly seasonality dummy variables
+model_df$week1 <- 0
+model_df$week2 <- 0
+model_df$week3 <- 0
+model_df$week4 <- 0
+
+model_df$week1[model_df$week_num == 2] <- 1
+model_df$week2[model_df$week_num == 3] <- 1
+model_df$week4[model_df$week_num == 4] <- 1
+
+# create quarter seasonality dummy variables
+model_df$quarter1 <- 0 
+model_df$quarter2 <- 0 
+model_df$quarter3 <- 0 
+model_df$quarter4 <- 0 
+
+model_df$quarter1[model_df$month_num == 2] <- 1
+model_df$quarter2[model_df$month_num == 3] <- 1
+model_df$quarter4[model_df$month_num == 4] <- 1
+
+# Include other dummy variables
+model_df$na <- data_transform$na
+model_df$bank_holidays <- data_transform$bank_holidays
+model_df$outliers <- data_transform$outliers
+
+model_df <- select(model_df, -day_num, -week_num, -month_num)
+```
+
+```{r}
+# split time series into train and validation sets (90:10 ratio)
+total_obs <- length(ts_data)
+split_ts <- ts_split(ts.obj = ts_data, sample.out = round(0.1*total_obs))
+train_set <- split_ts$train
+val_set <- split_ts$test
+
+# verify length of each set
+length(train_set)
+length(val_set)
+
+train_df <- model_df[1:length(train_set),]
+test_start_point <- length(train_set) + 1
+test_df <- model_df[test_start_point:total_obs,]
+
+train_ts_df <- ts_df[1:length(train_set),]
+test_ts_df <- ts_df[test_start_point:total_obs,]
+```
+
+```{r}
+# Exploring different types of trend 
+
+linear_trend <- lm(value ~ as.numeric(date), data = train_ts_df)
+forecast::accuracy(predict(linear_trend, test_ts_df), test_ts_df$value)[,c(2,3,5)]
+
+exponential_trend <- lm(log(value) ~ as.numeric(date), data = train_ts_df)
+forecast::accuracy(predict(exponential_trend, test_ts_df), test_ts_df$value)[,c(2,3,5)]
+
+quadratic_trend <- lm(value ~ poly(as.numeric(date), 2), data = train_ts_df)
+forecast::accuracy(predict(quadratic_trend, test_ts_df), test_ts_df$value)[,c(2,3,5)]
+
+cubic_trend <- lm(value ~ poly(as.numeric(date), 3), data = train_ts_df)
+forecast::accuracy(predict(cubic_trend, test_ts_df), test_ts_df$value)[,c(2,3,5)]
+
+spline_model <- splinef(train_set, h = 14)
+forecast::accuracy(spline_model, val_set)[,c(2,3,5)]
+
+spline_model_box <- splinef(train_set, h = 14, lambda = "auto")
+forecast::accuracy(spline_model_box, val_set)[,c(2,3,5)]
+
+plot(linear_trend$fitted.values)
+plot(quadratic_trend$fitted.values)
+plot(cubic_trend$fitted.values)
+plot(exponential_trend$fitted.values)
+plot(spline_model$fitted)
+plot(spline_model_box$fitted)
+```
+
+```{r}
+train_df$spline_model_box <- scale(spline_model_box$fitted)
+
+spline_model_box_test <- splinef(val_set, h = 14, lambda = "auto")
+test_df$spline_model_box <- scale(spline_model_box_test$fitted)
+
+spline_model_box_all <- splinef(ts_data, h = 14, lambda = "auto")
+model_df$spline_model_box <- scale(spline_model_box_all$fitted)
+```
+
+```{r}
+# Initial regression
+reg_initial <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box, 
+                 data = train_df)
+
+summary(reg_initial)
+AICc(reg_initial)
+BIC(reg_initial)
+checkresiduals(reg_initial)
+vif(reg_initial)
+```
+
+```{r}
+# add quarterly seasonality 
+reg_quarter <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + quarter1 + quarter2 + quarter4, 
+                 data = train_df)
+
+summary(reg_quarter)
+checkresiduals(reg_quarter)
+vif(reg_quarter)
+```
+
+
+```{r}
+# add monthly seasonality 
+reg_month <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + week1 + week2 + week4, 
+                 data = train_df)
+
+
+summary(reg_month)
+checkresiduals(reg_month)
+vif(reg_month)
+```
+
+```{r}
+# add both quarterly and monthly seasonality 
+reg_quarter_month <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + quarter1 + quarter2 + quarter4 + 
+                   week1 + week2 + week4, 
+                 data = train_df)
+
+summary(reg_quarter_month)
+checkresiduals(reg_quarter_month)
+vif(reg_quarter_month)
+```
+
+```{r}
+# add missing values
+reg_missing <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + na, 
+                 data = train_df)
+
+summary(reg_missing)
+vif(reg_missing)
+checkresiduals(reg_missing)
+```
+
+```{r}
+# add outliers 
+reg_outliers <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + outliers, 
+                 data = train_df)
+
+summary(reg_outliers)
+vif(reg_outliers)
+checkresiduals(reg_outliers)
+```
+
+```{r}
+# add bank Holidays
+reg_bank <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + bank_holidays, 
+                 data = model_df)
+
+summary(reg_bank)
+checkresiduals(reg_bank)
+vif(reg_bank)
+```
+
+```{r}
+# add Lag 7
+reg_lag_7 <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + lag_7, 
+                 data = model_df)
+
+summary(reg_lag_7)
+checkresiduals(reg_lag_7)
+vif(reg_lag_7)
+```
+
+```{r}
+reg_optimal_1 <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + quarter1 + quarter2 + quarter4 +
+                   na  + bank_holidays + outliers, data = train_df)
+
+summary(reg_optimal_1)
+AICc(reg_optimal_1)
+BIC(reg_optimal_1)
+vif(reg_optimal_1)
+checkresiduals(reg_optimal_1)
+```
+
+```{r}
+# regression with variables found to be significant + lags based on ACF 
+# added lags: 1, 2
+reg_optimal_2 <- lm(y ~ day_num1 + day_num2 + day_num3 + day_num4 + day_num5 +
+                 day_num7 + spline_model_box + quarter1 + quarter2 + quarter4 +
+                   na  + bank_holidays + outliers + lag_1 + lag_2, data = train_df)
+
+summary(reg_optimal_2)
+AICc(reg_optimal_2)
+BIC(reg_optimal_2)
+vif(reg_optimal_2)
+checkresiduals(reg_optimal_2)
+sqrt(mean(residuals(reg_optimal_2)^2, na.rm=TRUE))
+```
+
+```{r}
+auto_train_df <- na.omit(train_df)
+auto_reg_0 <- lm(y ~ 1, data = auto_train_df)
+auto_reg_1 <- lm(y ~ ., data = auto_train_df)
+```
+
+```{r}
+auto_backward <- step(auto_reg_1, formula(auto_reg_1), direction = "backward", trace = 0)
+summary(auto_backward)
+```
+
+# error metric
+```{r}
+last_14 <- tail(train_df, 14)
+```
+
+```{r}
+auto_backward_full <- lm(formula = y ~ lag_1 + lag_2 + lag_14 + lag_16 + lag_18 + lag_20 + 
+                               lag_21 + day_num1 + day_num2 + day_num3 + day_num4 + day_num5 + 
+                               day_num7 + quarter1 + quarter2 + quarter4 + na + bank_holidays + 
+                               outliers + spline_model_box, data = auto_train_df)
+
+summary(auto_backward_full)
+AICc(auto_backward_full)
+BIC(auto_backward_full)
+
+# in sample 
+forecast::accuracy(predict(auto_backward_full, last_14), last_14$y)
+# out of sample
+forecast::accuracy(predict(auto_backward_full, test_df), test_df$y)
+Metrics::smape(test_df$y, predict(auto_backward_full, test_df))
+
+checkresiduals(auto_backward_full)
+```
+
+```{r}
+# in sample 
+forecast::accuracy(predict(reg_optimal_1, last_14), last_14$y)
+# out of sample
+forecast::accuracy(predict(reg_optimal_1, test_df), test_df$y)
+Metrics::smape(test_df$y, predict(reg_optimal_1, test_df))
+
+# rolling origin evaluation
+h <- 14
+lag_no <- 0
+start_point <- lag_no + 1
+end_point <- length(train_set) - h - 1
+medium_noise_length <- length(ts_data)
+num_times_predict <- end_point - start_point + 1
+
+medium_noise_forecasts <- matrix(NA, nrow=num_times_predict, ncol=h)
+medium_noise_holdout <- matrix(NA, nrow=num_times_predict, ncol=h)
+medium_noise_RMSE <- matrix(NA, nrow=num_times_predict, ncol=1)
+
+for(i in start_point:end_point){
+    train_start <- start_point
+    train_end <- h + i - start_point
+    our_train_set <- train_df[train_start:train_end, ]
+    if (length(train_set) - train_end != 14){
+      test_start <- train_end + 1
+      test_end <- test_start + h - 1
+     
+      our_test_set <- train_df[test_start:test_end, ]
+      medium_noise_holdout[i - start_point,] <- our_test_set$y
+      
+      current_reg <- reg_optimal_1
+      
+      current_reg_pred <- predict(current_reg, our_test_set)
+      medium_noise_forecasts[i - start_point,] <- current_reg_pred
+      medium_noise_RMSE[i - start_point,] <- sqrt(mean((our_test_set$y - current_reg_pred)^2))
+        
+    } else{
+      break
+    }
+}
+
+complete_cases_holdout <- complete.cases(medium_noise_holdout)
+medium_noise_holdout <- medium_noise_holdout[complete_cases_holdout,]
+medium_noise_forecasts <- medium_noise_forecasts[complete_cases_holdout,]
+
+complete_cases_forecasts <- complete.cases(medium_noise_forecasts)
+medium_noise_holdout <- medium_noise_holdout[complete_cases_forecasts,]
+medium_noise_forecasts <- medium_noise_forecasts[complete_cases_forecasts,]
+
+plot(colMeans(abs(medium_noise_holdout - medium_noise_forecasts)),  type = "l", 
+         ylab = "MAE", xlab = "Horizons", 
+         main = "MAE of each horizon")
+mean(colMeans(abs(medium_noise_holdout - medium_noise_forecasts)))
+```
+
+```{r}
+# in sample 
+forecast::accuracy(predict(reg_optimal_2, last_14), last_14$y)
+# out of sample
+forecast::accuracy(predict(reg_optimal_2, test_df), test_df$y)
+Metrics::smape(test_df$y, predict(reg_optimal_2, test_df))
+
+# rolling origin evaluation
+h <- 14
+lag_no <- 2
+start_point <- lag_no + 1
+end_point <- length(train_set) - h - 1
+medium_noise_length <- length(ts_data)
+num_times_predict <- end_point - start_point + 1
+
+medium_noise_forecasts <- matrix(NA, nrow=num_times_predict, ncol=h)
+medium_noise_holdout <- matrix(NA, nrow=num_times_predict, ncol=h)
+medium_noise_RMSE <- matrix(NA, nrow=num_times_predict, ncol=1)
+
+for(i in start_point:end_point){
+    train_start <- start_point
+    train_end <- h + i - start_point 
+    our_train_set <- train_df[train_start:train_end, ] 
+    if (length(train_set) - train_end != 14){
+      test_start <- train_end + 1
+      test_end <- test_start + h - 1 
+     
+      our_test_set <- train_df[test_start:test_end, ]
+      medium_noise_holdout[i - start_point,] <- our_test_set$y
+  
+      current_reg <- reg_optimal_2
+      
+      current_reg_pred <- predict(current_reg, our_test_set)
+      medium_noise_forecasts[i - start_point,] <- current_reg_pred
+      medium_noise_RMSE[i - start_point,] <- sqrt(mean((our_test_set$y - current_reg_pred)^2))
+        
+    } else{
+      break
+    }
+}
+
+complete_cases_holdout <- complete.cases(medium_noise_holdout)
+medium_noise_holdout <- medium_noise_holdout[complete_cases_holdout,]
+medium_noise_forecasts <- medium_noise_forecasts[complete_cases_holdout,]
+
+complete_cases_forecasts <- complete.cases(medium_noise_forecasts)
+medium_noise_holdout <- medium_noise_holdout[complete_cases_forecasts,]
+medium_noise_forecasts <- medium_noise_forecasts[complete_cases_forecasts,]
+
+plot(colMeans(abs(medium_noise_holdout - medium_noise_forecasts)),  type = "l", 
+         ylab = "MAE", xlab = "Horizons", 
+         main = "MAE of each horizon")
+mean(colMeans(abs(medium_noise_holdout - medium_noise_forecasts)))
+```
+
+```{r}
+# in sample 
+forecast::accuracy(predict(reg_initial, last_14), last_14$y)
+# out of sample
+forecast::accuracy(predict(reg_initial, test_df), test_df$y)
+Metrics::smape(test_df$y, predict(reg_initial, test_df))
+
+# rolling origin evaluation
+h <- 14
+
+lag_no <- 0
+start_point <- lag_no + 1
+end_point <- length(train_set) - h - 1
+medium_noise_length <- length(ts_data)
+num_times_predict <- end_point - start_point + 1
+
+medium_noise_forecasts <- matrix(NA, nrow=num_times_predict, ncol=h)
+medium_noise_holdout <- matrix(NA, nrow=num_times_predict, ncol=h)
+medium_noise_RMSE <- matrix(NA, nrow=num_times_predict, ncol=1)
+
+for(i in start_point:end_point){
+    train_start <- start_point
+    train_end <- h + i - start_point
+    our_train_set <- train_df[train_start:train_end, ]
+    if (length(train_set) - train_end != 14){
+      test_start <- train_end + 1 
+      test_end <- test_start + h - 1 
+     
+      our_test_set <- train_df[test_start:test_end, ]
+      medium_noise_holdout[i - start_point,] <- our_test_set$y
+      
+      current_reg <- reg_initial
+      
+      current_reg_pred <- predict(current_reg, our_test_set)
+      medium_noise_forecasts[i - start_point,] <- current_reg_pred
+      medium_noise_RMSE[i - start_point,] <- sqrt(mean((our_test_set$y - current_reg_pred)^2))
+        
+    } else{
+      break
+    }
+}
+
+complete_cases_holdout <- complete.cases(medium_noise_holdout)
+medium_noise_holdout <- medium_noise_holdout[complete_cases_holdout,]
+medium_noise_forecasts <- medium_noise_forecasts[complete_cases_holdout,]
+
+complete_cases_forecasts <- complete.cases(medium_noise_forecasts)
+medium_noise_holdout <- medium_noise_holdout[complete_cases_forecasts,]
+medium_noise_forecasts <- medium_noise_forecasts[complete_cases_forecasts,]
+
+plot(colMeans(abs(medium_noise_holdout - medium_noise_forecasts)),  type = "l", 
+         ylab = "MAE", xlab = "Horizons", 
+         main = "MAE of each horizon")
+mean(colMeans(abs(medium_noise_holdout - medium_noise_forecasts)))
+```
+
+```{r}
+next_14_days <- c(data$date_obj[735] + 1, data$date_obj[735] + 2, data$date_obj[735] + 3, data$date_obj[735] + 4,
+                          data$date_obj[735] + 5, data$date_obj[735] + 6, data$date_obj[735] + 7, data$date_obj[735] + 8, 
+                          data$date_obj[735] + 9, data$date_obj[735] + 10, data$date_obj[735] + 11, data$date_obj[735] + 12,
+                          data$date_obj[735] + 13, data$date_obj[735] + 14)
+
+# Get prediction interval
+PI <- predict(reg_optimal_2, newdata = model_df[722:735,], interval = "prediction")
+
+# Combine data into a single data frame
+PTA_new_df <- tibble(xvals = next_14_days, 
+         lwr = PI[, 2],
+         upr = PI[, 3],
+         fit = PI[, 1])
+
+ggplot(data = PTA_new_df, aes(x = xvals, y = fit)) +
+    geom_point() +
+    geom_smooth(method = "lm", color = "black", se = TRUE) +
+    geom_line(data = PTA_new_df, aes(x = xvals, y = lwr), linetype = "dashed", color = "grey") +
+    geom_line(data = PTA_new_df, aes(x = xvals, y = upr), linetype = "dashed", color = "grey") +
+    xlab("Time") +
+    ylab("values") + theme_classic()
+```

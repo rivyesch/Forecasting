@@ -1,0 +1,302 @@
+---
+title: "Data Exploration"
+author: 'Rivyesch Ranjan'
+date: "2023-02-26"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# downloading required packages
+# install.packages("imputeTS")
+# install.packages("outliers")
+# install.packages("Kendall")
+# install.packages("randtests")
+
+# importing libraries
+library(tsutils)
+library(forecast)
+library(tseries)
+library(smooth)
+library(dplyr)
+library(lubridate)
+library(imputeTS)
+library(lubridate)
+library(ggplot2)
+library(stats)
+library(fpp2)
+library(xts)
+library(randtests)
+library(Kendall)
+library(outliers)
+```
+
+```{r}
+# Importing raw time series data
+rawData <- read.csv("NN5-034.csv",header=T)[-1:-3,]
+
+# All missing values are treated as NA
+rawData[rawData == ''] <- NA
+
+# Changing column names
+colnames(rawData) <- c('date','values')
+
+# Check for missing values in each column of the dataframe
+sapply(rawData, function(x) sum(is.na(x)))
+
+# Convert data to appropriate data type format
+rawData$date_obj <- dmy(rawData$date)
+rawData$values <- as.numeric(rawData$values)
+
+rawData$values <- ifelse(rawData$values == 0, NA, rawData$values)
+
+# Linear interpolation to fill missing values in time series
+rawData$values_no_na <- na_interpolation(rawData$values, option = "linear")
+
+# Check the summary of the data
+summary(rawData$values_no_na)
+
+# Write a csv file containing the cleaned data
+write.csv(rawData[,c(3,4)], "cleaned_data.csv", row.names=FALSE)
+```
+
+```{r}
+# Visualising the raw data time series
+ggplot(rawData, aes(date_obj, ts_daily)) +
+  geom_line()
+```
+
+```{r}
+# Identifying missing values and its corresponding location in the time series
+ggplot_na_distribution(rawData$values, rawData$date_obj)
+```
+
+```{r}
+# Plotting daily time series 
+ts_daily <- ts(rawData$values_no_na, frequency = 365.25, start = c(1996, 3, 18))
+plot(ts_daily, xlab="Days", ylab="y")
+plot(ts_daily, xlab="Days", ylab="y", type = "b")
+
+# Finding distribution of the data
+qqnorm(ts_daily)
+qqline(ts_daily, col="red")
+shapiro.test(ts_daily)
+```
+
+```{r}
+# Finding autocorrelations between different time lags
+ts_lags(ts_daily, lags = c(1, 4, 7, 8, 12, 30))
+ts_lags(ts_daily, lags = 7)
+```
+
+```{r}
+# Daily data (undifferenced)
+tsdisplay(ts_daily)
+```
+
+```{r}
+# Stationary Test on entire dataset
+kpss.test(ts_daily) 
+adf.test(ts_daily)
+SeasonalMannKendall(as.ts(rawData$values_no_na))
+cox.stuart.test(ts_daily)
+```
+
+```{r}
+boxplot(ts_daily)
+```
+
+```{r}
+# Decomposing daily time series
+stl_decomposition_boxcox <- stl(BoxCox(ts_daily, lambda=BoxCox.lambda(ts_daily)), s.window = 7)
+plot(stl_decomposition_boxcox)
+
+decomp(rawData$values_no_na, m=7, decomposition = "multiplicative", outplot=TRUE)
+plot(decompose(ts_daily, type="multiplicative"))
+```
+
+```{r}
+# Decomposing time series using stl for additive seasonality
+stl_decomposition <- stl(ts_daily, s.window = 7)
+plot(stl_decomposition)
+```
+
+Since data is not stationary, and has clearly shown to have a trend and weekly seasonality the time series will have to be differenced to make it stationary
+
+```{r}
+# Differencing data to remove seasonality component
+diff_data <- diff(ts_daily, lag=7)
+tsdisplay(diff_data)
+
+kpss.test(diff_data)
+
+# Since p-value 0.1 is more than critical value 0.05, we accept the null 
+# hypothesis that the data is stationary (conclusion: stationary data)
+
+adf.test(diff_data)
+
+# Since p-value 0.01 is less than critical value 0.05, we reject the null 
+# hypothesis that the data is non-stationary (conclusion: stationary data)
+
+# Therefore, kpss test and adf test concludes data is stationary
+```
+
+```{r}
+# Differencing data to remove trend component
+diff2_data <- diff(diff_data)
+tsdisplay(diff2_data)
+
+kpss.test(diff2_data)
+# Since p-value 0.1 is more than critical value 0.05, accept null hypothesis 
+# of data being stationary
+
+adf.test(diff2_data)
+# Since p-value 0.01 is less than critical value 0.05, reject null hypothesis 
+# of data being non-stationary
+
+# Therefore, kpss test and adf test concludes data is stationary
+```
+
+```{r}
+# Plotting and analysing residuals
+ts_comp <- as.data.frame(stl_decomposition$time.series)
+tsdisplay(ts_comp$remainder)
+mean(ts_comp$remainder)
+
+# Checking the distribution of the residuals
+qqnorm(ts_comp$remainder)
+qqline(ts_comp$remainder, col="red")
+shapiro.test(ts_comp$remainder)
+```
+
+```{r}
+# Grubbs outlier test on residuals
+grubbs.test(ts_daily, type = 11, opposite = FALSE, two.sided = FALSE)
+
+# Outliers 
+tsoutliers(ts_daily)
+```
+
+```{r}
+# Apply windows function to analyse separate subsets/parts of the time series
+break1 <- ymd("1996-10-12")
+my_ts_subset1 <- window(ts_daily, start=1996, end=decimal_date(break1))
+plot(my_ts_subset1)
+
+break2 <- ymd("1996-10-12")
+my_ts_subset2 <- window(ts_daily, start=decimal_date(break1), end=)
+plot(my_ts_subset2)
+
+# Box plot of each window
+boxplot(my_ts_subset1)
+boxplot(my_ts_subset2)
+```
+
+```{r}
+# Statistical test on window 1
+
+kpss.test(my_ts_subset1) 
+# Since p-value 0.1 is more than critical value 0.05, we accept the null 
+# hypothesis that the data is stationary (conclusion: stationary data)
+
+adf.test(my_ts_subset1)
+# Since p-value 0.02 is less than critical value 0.05, we reject the null 
+# hypothesis that the data is non-stationary (conclusion: stationary data)
+
+length(my_ts_subset1)  # 283
+SeasonalMannKendall(as.ts(rawData$values_no_na[1:283]))
+
+cox.stuart.test(my_ts_subset1)
+```
+
+```{r}
+# Statistical test on window 2
+
+kpss.test(my_ts_subset2) 
+# Since p-value 0.01 is less than critical value 0.05, we reject the null 
+# hypothesis that the data is stationary (conclusion: non-stationary data)
+
+adf.test(my_ts_subset2)
+# Since p-value 0.01 is less than critical value 0.05, we reject the null 
+# hypothesis that the data is non-stationary (conclusion: stationary data)
+
+SeasonalMannKendall(as.ts(rawData$values_no_na[284:735]))
+
+cox.stuart.test(my_ts_subset2)
+```
+
+Data Aggregation
+```{r}
+# Plotting weekly time series 
+myts <- xts(rawData$values_no_na, order.by = seq(as.Date("1996-03-18"), by = "days", length.out = length(rawData$values_no_na)))
+myts_weekly <- apply.weekly(myts, sum)
+
+ts_weekly <- ts(myts_weekly , frequency = 52, start = c(1996, 3, 18))
+plot(ts_weekly, xlab="Weeks", ylab="y")
+```
+
+```{r}
+# Plotting monthly time series 
+myts_monthly <- apply.monthly(myts, sum)
+
+ts_monthly <- ts(myts_monthly , frequency = 12, start = c(1996, 3, 18))
+plot(ts_monthly, xlab="Months", ylab="y")
+```
+
+```{r}
+# Create example date
+data_daily$day <- weekdays(data_daily$date, abbreviate = FALSE)
+#reorder day values
+data_daily$day <- factor(data_daily$day , levels=c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
+
+# Box plot on daily data
+boxplot(data_daily$values ~ data_daily$year)
+boxplot(data_daily$values ~ data_daily$month)
+boxplot(data_daily$values ~ data_daily$day)
+```
+
+```{r}
+# Centre Moving Average of Daily Data
+
+data_cma_3 <- cmav(ts_daily, ma = 3, fill=FALSE)
+data_cma_7 <- cmav(ts_daily, ma = 7, fill=FALSE)
+data_cma_14 <- cmav(ts_daily, ma = 14, fill=FALSE)
+data_cma_30 <- cmav(ts_daily, ma = 30, fill=FALSE)
+
+#Plot the original time series in blue
+plot(ts_daily, col="black")
+
+#Plot the CMA in red
+# lines(data_cma_3, col = "green")
+# lines(data_cma_7, col = "red")
+#lines(data_cma_14, col = "green")
+lines(data_cma_30, col = "red")
+```
+
+```{r}
+# Seasonality of Daily Data
+seasplot(ts_daily)
+
+# Specified a weekly seasonality in the daily data
+seasplot(ts_daily, m=7)
+seasplot(ts_daily, m=7, outplot=2)
+seasplot(myts_weekly, m=52)
+```
+
+```{r}
+# Identify potential outliers in the remainder component
+outliers <- which(abs(ts_comp$remainder) > 2*sd(ts_comp$remainder))
+remainder_df <- as.data.frame(ts_comp$remainder)
+colnames(remainder_df) <- "remainders"
+remainder_df$outliers <- NA
+remainder_df$outliers[outliers] <- remainder_df$remainders[outliers]
+remainder_df
+# Plot the potential outliers
+plot(remainder_df$remainders, type = "b") 
+points(remainder_df$outliers, col = "red")
+# p-value more than 0.05, so there is an outlier
+grubbs.test(ts_comp$remainder)
+```
